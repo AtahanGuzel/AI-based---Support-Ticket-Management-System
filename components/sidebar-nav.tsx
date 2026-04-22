@@ -3,44 +3,47 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/components/auth-provider"
 import { 
   MessageSquare, 
   LayoutDashboard, 
   Headphones, 
   Settings,
+  FileBarChart2,
+  LogOut,
   Sparkles,
   ChevronRight
 } from "lucide-react"
+import type { UserRole } from "@/lib/auth"
+import { Button } from "@/components/ui/button"
 
-const navItems = [
-  {
-    title: "AI Support",
-    href: "/",
-    icon: MessageSquare,
-    description: "Chat with AI",
-  },
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    description: "Kanban board",
-  },
-  {
-    title: "Staff Panel",
-    href: "/staff",
-    icon: Headphones,
-    description: "Manage tickets",
-  },
-  {
-    title: "Settings",
-    href: "/settings",
-    icon: Settings,
-    description: "Preferences",
-  },
-]
+const roleNavigation: Record<UserRole, Array<{ title: string; href: string; icon: React.ElementType; description: string }>> = {
+  customer: [
+    { title: "AI Support", href: "/", icon: MessageSquare, description: "Create problems" },
+    { title: "Settings", href: "/settings", icon: Settings, description: "Preferences" },
+  ],
+  agent: [
+    { title: "AI Support", href: "/", icon: MessageSquare, description: "Create problems" },
+    { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, description: "Kanban board" },
+    { title: "Staff Panel", href: "/staff", icon: Headphones, description: "Resolve tickets" },
+    { title: "Settings", href: "/settings", icon: Settings, description: "Preferences" },
+  ],
+  admin: [
+    { title: "AI Support", href: "/", icon: MessageSquare, description: "Create problems" },
+    { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, description: "Ticket overview" },
+    { title: "Report", href: "/report", icon: FileBarChart2, description: "Weekly summary" },
+    { title: "Settings", href: "/settings", icon: Settings, description: "Preferences" },
+  ],
+}
 
 export function SidebarNav() {
   const pathname = usePathname()
+  const { user, logout } = useAuth()
+
+  if (!user) return null
+
+  const navItems = roleNavigation[user.role]
+  const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border/50 bg-white">
@@ -99,13 +102,22 @@ export function SidebarNav() {
         <div className="border-t border-border/50 p-4">
           <div className="flex items-center gap-3 rounded-xl bg-gradient-to-r from-slate-50 to-white px-3 py-3 border border-border/50">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 text-sm font-bold text-primary shadow-sm">
-              JD
+              {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">John Doe</p>
-              <p className="text-[11px] text-muted-foreground truncate">john@company.com</p>
+              <p className="text-sm font-semibold text-foreground truncate">{user.firstName} {user.lastName}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
             </div>
           </div>
+          <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground">{user.role}</p>
+          <Button
+            variant="outline"
+            className="mt-3 w-full rounded-xl border-border/50"
+            onClick={logout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </div>
     </aside>

@@ -50,7 +50,14 @@ interface KanbanBoardProps {
   onTicketMove?: (ticketId: string, newStatus: KanbanTicket["status"]) => void
 }
 
-function TicketCard({ ticket }: { ticket: KanbanTicket }) {
+interface GroupedKanbanTicket {
+  primary: KanbanTicket
+  ticketIds: string[]
+}
+
+function TicketCard({ group }: { group: GroupedKanbanTicket }) {
+  const ticket = group.primary
+  const duplicateCount = group.ticketIds.length
   const CategoryIcon = categoryIcons[ticket.category] || Ticket
   
   return (
@@ -68,6 +75,11 @@ function TicketCard({ ticket }: { ticket: KanbanTicket }) {
               >
                 {priorityConfig[ticket.priority].label}
               </Badge>
+              {duplicateCount > 1 && (
+                <Badge className="h-[18px] px-1.5 py-0 text-[10px] font-semibold bg-red-500 hover:bg-red-500 text-white">
+                  {duplicateCount}
+                </Badge>
+              )}
             </div>
             <h3 className="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {ticket.title}
@@ -120,14 +132,28 @@ function TicketCard({ ticket }: { ticket: KanbanTicket }) {
 }
 
 export function KanbanBoard({ tickets }: KanbanBoardProps) {
-  const getTicketsByStatus = (status: KanbanTicket["status"]) => {
-    return tickets.filter((ticket) => ticket.status === status)
+  const getGroupedTicketsByStatus = (status: KanbanTicket["status"]) => {
+    const grouped = new Map<string, GroupedKanbanTicket>()
+
+    tickets
+      .filter((ticket) => ticket.status === status)
+      .forEach((ticket) => {
+        const key = `${ticket.status}::${ticket.title}`
+        const existing = grouped.get(key)
+        if (existing) {
+          existing.ticketIds.push(ticket.id)
+          return
+        }
+        grouped.set(key, { primary: ticket, ticketIds: [ticket.id] })
+      })
+
+    return Array.from(grouped.values())
   }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {columns.map((column) => {
-        const columnTickets = getTicketsByStatus(column.id)
+        const columnTickets = getGroupedTicketsByStatus(column.id)
         return (
           <div key={column.id} className="flex flex-col">
             {/* Column Header - Sticky */}
@@ -155,8 +181,8 @@ export function KanbanBoard({ tickets }: KanbanBoardProps) {
                     <p className="text-xs text-muted-foreground/40 mt-1">Drag tickets here</p>
                   </div>
                 ) : (
-                  columnTickets.map((ticket) => (
-                    <TicketCard key={ticket.id} ticket={ticket} />
+                  columnTickets.map((ticketGroup) => (
+                    <TicketCard key={ticketGroup.primary.id} group={ticketGroup} />
                   ))
                 )}
               </div>

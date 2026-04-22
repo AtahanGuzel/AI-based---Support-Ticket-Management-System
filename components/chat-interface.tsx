@@ -7,6 +7,8 @@ import { TicketTracker, type Ticket } from "./ticket-tracker"
 import { Sparkles, MessageSquarePlus, Zap, Mail, Wifi, Monitor, Key, HardDrive } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { useAuth } from "@/components/auth-provider"
+import Link from "next/link"
 
 const quickActions = [
   { label: "Email issues", icon: Mail },
@@ -16,7 +18,11 @@ const quickActions = [
   { label: "Hardware problem", icon: HardDrive },
 ]
 
-const mockTickets: Ticket[] = [
+interface MockTicket extends Ticket {
+  requesterEmail: string
+}
+
+const mockTickets: MockTicket[] = [
   {
     id: "TK-1234",
     title: "Email sync not working on mobile",
@@ -24,6 +30,7 @@ const mockTickets: Ticket[] = [
     status: "in-progress",
     slaTime: "2h 30m",
     category: "Email",
+    requesterEmail: "customer@example.com",
   },
   {
     id: "TK-1233",
@@ -32,6 +39,7 @@ const mockTickets: Ticket[] = [
     status: "open",
     slaTime: "24h",
     category: "Hardware",
+    requesterEmail: "customer@example.com",
   },
   {
     id: "TK-1232",
@@ -40,6 +48,16 @@ const mockTickets: Ticket[] = [
     status: "open",
     slaTime: "8h",
     category: "Network",
+    requesterEmail: "alex.customer@example.com",
+  },
+  {
+    id: "TK-1241",
+    title: "Zoom video quality issues during meetings",
+    priority: 4,
+    status: "resolved",
+    slaTime: "Completed",
+    category: "Software",
+    requesterEmail: "customer@example.com",
   },
 ]
 
@@ -62,11 +80,21 @@ const aiResponses = [
 ]
 
 export function ChatInterface() {
+  const { user } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [isTyping, setIsTyping] = useState(false)
-  const [tickets, setTickets] = useState<Ticket[]>(mockTickets)
+  const [tickets, setTickets] = useState<MockTicket[]>(mockTickets)
   const [responseIndex, setResponseIndex] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const visibleLiveTickets = tickets.filter((ticket) => {
+    const belongsToCurrentCustomer = user?.role === "customer" ? ticket.requesterEmail === user.email : true
+    return belongsToCurrentCustomer && ticket.status !== "resolved"
+  })
+
+  const customerResolvedTicket = user?.role === "customer"
+    ? tickets.find((ticket) => ticket.requesterEmail === user.email && ticket.status === "resolved")
+    : undefined
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -120,13 +148,14 @@ export function ChatInterface() {
         description: "A support agent will follow up with you soon.",
       })
       // Add new ticket
-      const newTicket: Ticket = {
+      const newTicket: MockTicket = {
         id: `TK-${1235 + tickets.length}`,
         title: messages[0]?.content.slice(0, 50) || "Support Request",
         priority: 3,
         status: "open",
         slaTime: "4h",
         category: "General",
+        requesterEmail: user?.email || "customer@example.com",
       }
       setTickets((prev) => [newTicket, ...prev])
     }
@@ -230,7 +259,20 @@ export function ChatInterface() {
 
       {/* Right Sidebar - Ticket Tracker */}
       <div className="hidden lg:block w-80 shrink-0">
-        <TicketTracker tickets={tickets} />
+        <div className="space-y-4">
+          {user?.role !== "customer" && <TicketTracker tickets={visibleLiveTickets} />}
+          {customerResolvedTicket && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Resolved Ticket</p>
+              <p className="mt-1 text-sm text-emerald-900">
+                `{customerResolvedTicket.id}` was resolved by Sarah. Open it to confirm and close.
+              </p>
+              <Button asChild size="sm" className="mt-3 w-full rounded-xl bg-emerald-600 hover:bg-emerald-700">
+                <Link href={`/ticket/${customerResolvedTicket.id}`}>Review and close ticket</Link>
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

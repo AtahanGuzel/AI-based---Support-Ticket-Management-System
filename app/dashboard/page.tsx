@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { SidebarNav } from "@/components/sidebar-nav"
+import { ProtectedPage } from "@/components/protected-page"
 import { KanbanBoard, type KanbanTicket } from "@/components/kanban-board"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Search, Filter, SlidersHorizontal, Plus, Ticket, Clock, CheckCircle2, AlertTriangle } from "lucide-react"
+import { Search, Filter, SlidersHorizontal, Ticket, Clock, CheckCircle2, AlertTriangle } from "lucide-react"
 
 const mockTickets: KanbanTicket[] = [
   {
@@ -28,12 +29,22 @@ const mockTickets: KanbanTicket[] = [
     slaTime: "2h 30m",
   },
   {
+    id: "TK-1242",
+    title: "Email sync not working on mobile devices after iOS update",
+    priority: 2,
+    status: "in-progress",
+    category: "Email",
+    assignee: { name: "Sarah Chen", initials: "SC" },
+    createdAt: "1h ago",
+    tags: ["Android", "Mobile"],
+    slaTime: "3h",
+  },
+  {
     id: "TK-1235",
     title: "Request for new 27-inch monitor for design team",
     priority: 4,
     status: "open",
     category: "Hardware",
-    assignee: { name: "Mike Johnson", initials: "MJ" },
     createdAt: "4h ago",
     tags: ["Equipment"],
     slaTime: "24h",
@@ -130,7 +141,8 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <ProtectedPage allowedRoles={["agent", "admin"]}>
+      <div className="flex min-h-screen">
       <SidebarNav />
       <main className="flex-1 pl-64">
         {/* Header */}
@@ -139,10 +151,6 @@ export default function DashboardPage() {
             <h1 className="text-lg font-semibold text-foreground">Ticket Dashboard</h1>
             <p className="text-sm text-muted-foreground">Manage and track all support tickets</p>
           </div>
-          <Button className="gap-2 rounded-xl btn-primary-gradient">
-            <Plus className="h-4 w-4" />
-            New Ticket
-          </Button>
         </div>
 
         <div className="p-8 space-y-8">
@@ -260,6 +268,7 @@ export default function DashboardPage() {
           <KanbanBoard tickets={filteredTickets} />
         </div>
       </main>
-    </div>
+      </div>
+    </ProtectedPage>
   )
 }

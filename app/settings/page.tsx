@@ -1,6 +1,7 @@
 "use client"
 
 import { SidebarNav } from "@/components/sidebar-nav"
+import { ProtectedPage } from "@/components/protected-page"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -9,10 +10,31 @@ import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Bell, Mail, Shield, User, Palette, Globe } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
 
 export default function SettingsPage() {
+  const { user } = useAuth()
+  const initials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}` || "U"
+  const fullName = user ? `${user.firstName} ${user.lastName}` : "User"
+
+  const roleLabelByRole = {
+    customer: "Customer",
+    agent: "Support Agent",
+    admin: "Administrator",
+  } as const
+
+  const departmentByRole = {
+    customer: "Business Operations",
+    agent: "IT Support",
+    admin: "IT Administration",
+  } as const
+
+  const roleLabel = user ? roleLabelByRole[user.role] : "User"
+  const department = user ? departmentByRole[user.role] : "General"
+
   return (
-    <div className="flex min-h-screen">
+    <ProtectedPage>
+      <div className="flex min-h-screen">
       <SidebarNav />
       <main className="flex-1 pl-64">
         <div className="h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30 flex items-center px-6">
@@ -34,12 +56,12 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16">
                     <AvatarFallback className="text-lg bg-primary/10 text-primary font-medium">
-                      JD
+                      {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h3 className="font-medium text-foreground">John Doe</h3>
-                    <p className="text-sm text-muted-foreground">Support Agent</p>
+                    <h3 className="font-medium text-foreground">{fullName}</h3>
+                    <p className="text-sm text-muted-foreground">{roleLabel}</p>
                     <Button variant="link" className="h-auto p-0 text-sm text-primary">
                       Change avatar
                     </Button>
@@ -50,20 +72,20 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">First Name</label>
-                      <Input defaultValue="John" className="rounded-lg border-border" />
+                      <Input defaultValue={user?.firstName ?? ""} className="rounded-lg border-border" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">Last Name</label>
-                      <Input defaultValue="Doe" className="rounded-lg border-border" />
+                      <Input defaultValue={user?.lastName ?? ""} className="rounded-lg border-border" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Email</label>
-                    <Input defaultValue="john@company.com" type="email" className="rounded-lg border-border" />
+                    <Input defaultValue={user?.email ?? ""} type="email" className="rounded-lg border-border" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Department</label>
-                    <Input defaultValue="IT Support" className="rounded-lg border-border" />
+                    <Input defaultValue={department} className="rounded-lg border-border" />
                   </div>
                 </div>
               </CardContent>
@@ -200,6 +222,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </ProtectedPage>
   )
 }

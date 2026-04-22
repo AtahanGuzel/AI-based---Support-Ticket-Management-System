@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { SidebarNav } from "@/components/sidebar-nav"
+import { ProtectedPage } from "@/components/protected-page"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -26,6 +27,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { useAuth } from "@/components/auth-provider"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -149,6 +151,7 @@ const mockAssignedTickets: StaffTicket[] = [
 ]
 
 export default function StaffPanelPage() {
+  const { user } = useAuth()
   const [tickets, setTickets] = useState(mockAssignedTickets)
   const [selectedTicket, setSelectedTicket] = useState<StaffTicket | null>(mockAssignedTickets[0])
   const [searchQuery, setSearchQuery] = useState("")
@@ -222,9 +225,12 @@ export default function StaffPanelPage() {
     urgent: tickets.filter((t) => t.priority <= 2 && t.status !== "resolved").length,
     resolved: tickets.filter((t) => t.status === "resolved").length,
   }
+  const canRequesterCloseSelectedResolvedTicket =
+    selectedTicket?.status === "resolved" && user?.email === selectedTicket.requester.email
 
   return (
-    <div className="flex min-h-screen">
+    <ProtectedPage allowedRoles={["agent"]}>
+      <div className="flex min-h-screen">
       <SidebarNav />
       <main className="flex-1 pl-64">
         {/* Header */}
@@ -458,19 +464,21 @@ export default function StaffPanelPage() {
                       Resolve
                     </Button>
                   )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="rounded-xl border-border/50 hover:border-primary/30">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="rounded-xl">
-                      <DropdownMenuItem onClick={handleCloseTicket} className="text-destructive rounded-lg">
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Close Ticket
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {canRequesterCloseSelectedResolvedTicket && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="icon" className="rounded-xl border-border/50 hover:border-primary/30">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-xl">
+                        <DropdownMenuItem onClick={handleCloseTicket} className="text-destructive rounded-lg">
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Close Ticket
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
 
@@ -568,6 +576,7 @@ export default function StaffPanelPage() {
           )}
         </div>
       </main>
-    </div>
+      </div>
+    </ProtectedPage>
   )
 }
