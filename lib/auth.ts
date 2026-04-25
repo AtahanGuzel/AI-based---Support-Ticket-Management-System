@@ -1,11 +1,16 @@
 export type UserRole = "customer" | "agent" | "admin"
 
+export const SUPPORT_CATEGORIES = ["Email", "Network", "Security", "Software"] as const
+export type SupportCategory = (typeof SUPPORT_CATEGORIES)[number]
+
 export interface AppUser {
   firstName: string
   lastName: string
   email: string
   password: string
   role: UserRole
+  /** Queue scope for agents; only tickets in this category appear on the staff panel. */
+  supportCategory?: SupportCategory
 }
 
 export const MOCK_USERS: AppUser[] = [
@@ -22,6 +27,7 @@ export const MOCK_USERS: AppUser[] = [
     email: "agent@example.com",
     password: "agent123",
     role: "agent",
+    supportCategory: "Software",
   },
   {
     firstName: "Elif",

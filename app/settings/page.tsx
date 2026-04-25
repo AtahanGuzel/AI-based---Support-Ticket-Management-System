@@ -111,14 +111,6 @@ export default function SettingsPage() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <label className="text-sm font-medium text-foreground">SLA Warnings</label>
-                    <p className="text-xs text-muted-foreground">Alert when tickets are approaching SLA deadlines</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
                     <label className="text-sm font-medium text-foreground">Customer Replies</label>
                     <p className="text-xs text-muted-foreground">Notify when customers respond to tickets</p>
                   </div>

@@ -3,6 +3,7 @@ import { Inter, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/components/auth-provider'
+import { MockTicketsProvider } from '@/components/mock-tickets-provider'
 import './globals.css'
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -45,7 +46,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${geistMono.variable} bg-background`}>
       <body className="font-sans antialiased min-h-screen">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <MockTicketsProvider>{children}</MockTicketsProvider>
+        </AuthProvider>
         <Toaster position="top-right" />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

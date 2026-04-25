@@ -18,7 +18,6 @@ export interface KanbanTicket {
   }
   createdAt: string
   tags: string[]
-  slaTime: string
 }
 
 const priorityConfig = {
@@ -123,7 +122,7 @@ function TicketCard({ group }: { group: GroupedKanbanTicket }) {
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Clock className="h-3 w-3" />
-            <span className="font-medium">{ticket.slaTime}</span>
+            <span className="font-medium">{ticket.createdAt}</span>
           </div>
         </div>
       </div>

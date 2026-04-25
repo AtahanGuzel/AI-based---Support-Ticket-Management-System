@@ -12,7 +12,8 @@ import {
   FileBarChart2,
   LogOut,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Ticket,
 } from "lucide-react"
 import type { UserRole } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button"
 const roleNavigation: Record<UserRole, Array<{ title: string; href: string; icon: React.ElementType; description: string }>> = {
   customer: [
     { title: "AI Support", href: "/", icon: MessageSquare, description: "Create problems" },
+    { title: "My Tickets", href: "/my-tickets", icon: Ticket, description: "My requests" },
     { title: "Settings", href: "/settings", icon: Settings, description: "Preferences" },
   ],
   agent: [
@@ -31,6 +33,7 @@ const roleNavigation: Record<UserRole, Array<{ title: string; href: string; icon
   admin: [
     { title: "AI Support", href: "/", icon: MessageSquare, description: "Create problems" },
     { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, description: "Ticket overview" },
+    { title: "All Tickets", href: "/all-tickets", icon: Ticket, description: "Full ticket list" },
     { title: "Report", href: "/report", icon: FileBarChart2, description: "Weekly summary" },
     { title: "Settings", href: "/settings", icon: Settings, description: "Preferences" },
   ],

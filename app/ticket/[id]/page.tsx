@@ -1,6 +1,6 @@
 "use client"
 
-import { use } from "react"
+import { use, useRef } from "react"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ProtectedPage } from "@/components/protected-page"
 import { Badge } from "@/components/ui/badge"
@@ -24,7 +24,11 @@ import {
   Send,
   Calendar,
   Activity,
-  FileText
+  FileText,
+  Paperclip,
+  Mic,
+  X,
+  ImageIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -144,7 +148,6 @@ const getTicketData = (id: string) => {
     requester,
     createdAt: "April 15, 2026 at 10:30 AM",
     updatedAt: "April 15, 2026 at 2:45 PM",
-    slaDeadline: "April 15, 2026 at 6:30 PM",
     department: "Engineering",
     systemInfo: mockSystemInfoByTicketId[id] ?? { os: "iOS 17.4", browser: "Mail App 4.2.1", device: "iPhone 15 Pro" },
     aiSummary: "User experiencing email sync issues post-iOS update. Likely cause: OAuth token refresh failure or Exchange ActiveSync protocol mismatch. Recommended actions: Clear app cache, re-authenticate account, or contact Exchange admin for ActiveSync policy review.",
@@ -169,17 +172,37 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const { user } = useAuth()
   const ticket = getTicketData(id)
   const [newMessage, setNewMessage] = useState("")
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [status, setStatus] = useState(ticket.status)
   const [isClosed, setIsClosed] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const relatedTicketId = relatedTicketById[id]
   const isRequester = user?.email === ticket.requester.email
   const canManageTicket = user?.role === "agent" || user?.role === "admin"
+  const backHref = user?.role === "customer" ? "/my-tickets" : "/dashboard"
+  const backLabel = user?.role === "customer" ? "Back to My Tickets" : "Back to Dashboard"
 
   const handleSendMessage = () => {
-    if (newMessage.trim()) {
+    if (newMessage.trim() || attachedFiles.length > 0) {
       toast.success("Message sent", { description: "Your reply has been sent to the requester." })
+      setAttachedFiles([])
       setNewMessage("")
     }
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files) return
+    setAttachedFiles((prev) => [...prev, ...Array.from(event.target.files!)])
+  }
+
+  const removeAttachedFile = (index: number) => {
+    setAttachedFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index))
+  }
+
+  const handleVoiceRecord = () => {
+    toast.info("Voice recording", {
+      description: "Voice recording will be available soon. You can still attach audio files.",
+    })
   }
 
   const handleAssignToMe = () => {
@@ -211,7 +234,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 Your resolved ticket was confirmed and removed from the resolved section.
               </p>
               <Button asChild className="mt-6">
-                <Link href="/">Go to Home</Link>
+                <Link href={backHref}>{backLabel}</Link>
               </Button>
             </div>
           </main>
@@ -228,9 +251,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
         {/* Header */}
         <div className="h-16 border-b border-border/50 bg-white/80 backdrop-blur-xl sticky top-0 z-30 flex items-center justify-between px-8">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group">
+            <Link href={backHref} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group">
               <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-              <span className="text-sm font-medium">Back to Dashboard</span>
+              <span className="text-sm font-medium">{backLabel}</span>
             </Link>
             <Separator orientation="vertical" className="h-6" />
             <div className="flex items-center gap-2">
@@ -244,12 +267,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 <Link href={`/ticket/${relatedTicketId}`}>Go to related ticket #{relatedTicketId}</Link>
               </Button>
             )}
-            {status !== "resolved" && canManageTicket && (
+            {status !== "resolved" && (
               <>
-                <Button variant="outline" className="gap-2 rounded-xl border-border/50 hover:border-primary/30 hover:bg-primary/5 hover:text-primary transition-all" onClick={handleAssignToMe}>
-                  <UserPlus className="h-4 w-4" />
-                  Assign to me
-                </Button>
+                {canManageTicket && (
+                  <Button variant="outline" className="gap-2 rounded-xl border-border/50 hover:border-primary/30 hover:bg-primary/5 hover:text-primary transition-all" onClick={handleAssignToMe}>
+                    <UserPlus className="h-4 w-4" />
+                    Assign to me
+                  </Button>
+                )}
                 <Button className="gap-2 rounded-xl btn-primary-gradient" onClick={handleResolve}>
                   <CheckCircle2 className="h-4 w-4" />
                   Mark as Resolved
@@ -367,6 +392,31 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 
                 {/* Reply Input */}
                 <div className="px-6 py-4 border-t border-border/50 bg-gradient-to-r from-slate-50/50 to-white">
+                  {attachedFiles.length > 0 && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {attachedFiles.map((file, index) => (
+                        <div
+                          key={`${file.name}-${index}`}
+                          className="flex items-center gap-2 rounded-lg border border-border/50 bg-white px-3 py-1.5 text-xs"
+                        >
+                          {file.type.startsWith("image/") ? (
+                            <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                          ) : (
+                            <FileText className="h-3.5 w-3.5 text-amber-500" />
+                          )}
+                          <span className="max-w-[180px] truncate text-foreground">{file.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeAttachedFile(index)}
+                            className="rounded-full p-0.5 text-muted-foreground hover:bg-slate-100"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex gap-3">
                     <Input
                       placeholder="Type your reply..."
@@ -375,7 +425,37 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                       className="rounded-xl border-border/50 bg-white shadow-sm focus:shadow-md focus:border-primary/50 transition-all"
                       onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
                     />
-                    <Button onClick={handleSendMessage} className="gap-2 rounded-xl btn-primary-gradient shrink-0">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      accept="image/*,.pdf,.doc,.docx,.txt,.log,.mp3,.wav,.m4a"
+                      onChange={handleFileChange}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="rounded-xl border-border/50 bg-white"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="rounded-xl border-border/50 bg-white"
+                      onClick={handleVoiceRecord}
+                    >
+                      <Mic className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      onClick={handleSendMessage}
+                      className="gap-2 rounded-xl btn-primary-gradient shrink-0"
+                      disabled={!newMessage.trim() && attachedFiles.length === 0}
+                    >
                       <Send className="h-4 w-4" />
                       Send
                     </Button>
@@ -492,13 +572,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                     <div className="min-w-0">
                       <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Last Updated</p>
                       <p className="text-sm text-foreground truncate">{ticket.updatedAt}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50/50 border border-amber-100">
-                    <Clock className="h-4 w-4 text-amber-500 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-medium text-amber-600 uppercase tracking-wide">SLA Deadline</p>
-                      <p className="text-sm text-amber-700 font-medium truncate">{ticket.slaDeadline}</p>
                     </div>
                   </div>
                 </div>
