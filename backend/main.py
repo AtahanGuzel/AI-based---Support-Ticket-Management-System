@@ -1,47 +1,25 @@
-from flask import Flask, request, jsonify
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker
-import datetime
-import os
-from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-load_dotenv()
+# Yazdığımız tickets rotasını içeri aktarıyoruz
+from routes import tickets
 
-app = Flask(__name__)
+# Uygulamayı FastAPI olarak başlatıyoruz (Sorunu çözen kısım)
+app = FastAPI(title="Destek Bilet (Ticket) Sistemi API")
 
-# Veritabanı bağlantısı
-engine = create_engine(os.getenv("DATABASE_URL"))
-Base = declarative_base()
+# Güvenlik Duvarı (CORS) Ayarları
+# Frontend'inizin (HTML/JS) bu API'ye veri gönderebilmesi için şarttır
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Geliştirme ortamında her yerden gelen isteğe izin veriyoruz
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Tablo Modeli
-class Mesaj(Base):
-    __tablename__ = 'mesajlar'
-    id = Column(Integer, primary_key=True)
-    gonderen = Column(String)
-    icerik = Column(String)
-    tarih = Column(DateTime, default=datetime.datetime.utcnow)
+# Rotaları uygulamaya bağlıyoruz
+app.include_router(tickets.router, prefix="/tickets", tags=["Tickets"])
 
-Base.metadata.create_all(engine)
-
-def mesaj_kaydet(kullanici, mesaj_text):
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    yeni_mesaj = Mesaj(gonderen=kullanici, icerik=mesaj_text)
-    session.add(yeni_mesaj)
-    session.commit()
-    session.close()
-    return "Mesaj kaydedildi!"
-
-@app.route('/test-kayit', methods=['GET'])
-def test_kayit():
-    mesaj_kaydet("Ahmet", "Bu bir deneme mesajıdır")
-    return "Veritabanına deneme mesajı eklendi!"
-
-@app.route('/gonder', methods=['POST'])
-def gonder():
-    data = request.json
-    sonuc = mesaj_kaydet(data.get('gonderen'), data.get('icerik'))
-    return jsonify({"durum": "başarılı", "mesaj": sonuc})
-
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.get("/")
+def root():
+    return {"message": "Bilet Sistemi Backend'i Çalışıyor!"}
