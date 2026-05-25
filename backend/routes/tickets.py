@@ -115,3 +115,152 @@ def add_message(ticket_id: int, message: MessageCreateSchema, db: Session = Depe
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Mesaj eklenirken hata oluştu: {str(e)}")
+
+# ==========================================
+# YENİ ENDPOINT'LER - TICKET SINIFI GÖREVLERİ
+# ==========================================
+
+# -------------------------------------------
+# 1. Destek Personeli - Öncelik Sırası (Priority Queue)
+# GET /tickets
+# Kapalı olmayan biletleri aciliyet sırasına göre listeler
+# -------------------------------------------
+@router.get("/", summary="Öncelik Sırasına Göre Tüm Açık Biletler")
+def get_all_tickets(db: Session = Depends(get_db)):
+    try:
+        biletler = (
+            db.query(model.Ticket)
+            .filter(model.Ticket.status != "closed")
+            .order_by(model.Ticket.priority.asc(), model.Ticket.created_at.asc())
+            .all()
+        )
+
+        return [
+            {
+                "ticket_id": b.ticket_id,
+                "user_id": b.user_id,
+                "department_id": b.department_id,
+                "description": b.description,
+                "status": b.status,
+                "priority": b.priority,
+                "created_at": b.created_at,
+            }
+            for b in biletler
+        ]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Biletler listelenirken hata: {str(e)}")
+
+
+# -------------------------------------------
+# 2. Bilet Detayı + Sohbet Geçmişi
+# GET /tickets/{ticket_id}
+# Biletin tüm bilgilerini ve mesaj geçmişini döndürür
+# -------------------------------------------
+@router.get("/{ticket_id}", summary="Bilet Detayı ve Sohbet Geçmişi")
+def get_ticket_detail(ticket_id: int, db: Session = Depends(get_db)):
+    bilet = db.query(model.Ticket).filter(model.Ticket.ticket_id == ticket_id).first()
+
+    if not bilet:
+        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
+
+    mesajlar = (
+        db.query(model.TicketMessage)
+        .filter(model.TicketMessage.ticket_id == ticket_id)
+        .order_by(model.TicketMessage.created_at.asc())
+        .all()
+    )
+
+    return {
+        "ticket_id": bilet.ticket_id,
+        "user_id": bilet.user_id,
+        "department_id": bilet.department_id,
+        "description": bilet.description,
+        "status": bilet.status,
+        "priority": bilet.priority,
+        "created_at": bilet.created_at,
+        "resolved_at": bilet.resolved_at,
+        "conversation_history": [
+            {
+                "message_id": m.message_id,
+                "sender_id": m.sender_id,
+                "message_body": m.message_body,
+                "created_at": m.created_at,
+            }
+            for m in mesajlar
+        ],
+    }
+
+
+# -------------------------------------------
+# 3. Kullanıcının Kendi Biletleri
+# GET /tickets/my-tickets?user_id=X
+# Sadece o kullanıcıya ait biletleri listeler
+# -------------------------------------------
+@router.get("/my-tickets", summary="Kullanıcının Kendi Biletleri")
+def get_my_tickets(user_id: int, db: Session = Depends(get_db)):
+    try:
+        kullanici = db.query(model.User).filter(model.User.user_id == user_id).first()
+        if not kullanici:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+
+        biletler = (
+            db.query(model.Ticket)
+            .filter(model.Ticket.user_id == user_id)
+            .order_by(model.Ticket.created_at.desc())
+            .all()
+        )
+
+        return [
+            {
+                "ticket_id": b.ticket_id,
+                "description": b.description,
+                "status": b.status,
+                "priority": b.priority,
+                "created_at": b.created_at,
+                "resolved_at": b.resolved_at,
+            }
+            for b in biletler
+        ]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Biletler getirilirken hata: {str(e)}")
+
+
+# -------------------------------------------
+# 4. Durum Güncelleme + SLA Başlatma
+# PATCH /tickets/{ticket_id}/status
+# Bileti "resolved" yapar ve resolved_at zaman damgası basar
+# -------------------------------------------
+from datetime import datetime, timezone
+
+class StatusUpdateSchema(BaseModel):
+    status: str  # örn: "resolved", "in_progress", "closed"
+
+@router.patch("/{ticket_id}/status", summary="Bilet Durumu Güncelle ve SLA Kaydet")
+def update_ticket_status(ticket_id: int, payload: StatusUpdateSchema, db: Session = Depends(get_db)):
+    bilet = db.query(model.Ticket).filter(model.Ticket.ticket_id == ticket_id).first()
+
+    if not bilet:
+        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
+
+    bilet.status = payload.status
+
+    # Eğer resolved yapılıyorsa SLA için zaman damgası bas
+    if payload.status == "resolved":
+        bilet.resolved_at = datetime.now(timezone.utc)
+
+    try:
+        db.commit()
+        db.refresh(bilet)
+        return {
+            "message": f"Bilet durumu '{payload.status}' olarak güncellendi",
+            "ticket_id": bilet.ticket_id,
+            "status": bilet.status,
+            "resolved_at": bilet.resolved_at,
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Durum güncellenirken hata: {str(e)}")
