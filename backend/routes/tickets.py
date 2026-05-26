@@ -252,6 +252,7 @@ def add_message(
         )
         db.add(yeni_mesaj)
         db.commit()
+        db.refresh(yeni_mesaj) 
 
         return {
             "message": "Mesaj eklendi",
@@ -260,3 +261,19 @@ def add_message(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Mesaj eklenirken hata: {str(e)}")
+
+@router.get("/{ticket_id}/messages", summary="Bilete ait mesajları getir")
+def get_messages(
+    ticket_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: model.User = Depends(get_current_user) # Kullanıcıyı al
+):
+    bilet = db.query(model.Ticket).filter(model.Ticket.ticket_id == ticket_id).first()
+    if not bilet:
+        raise HTTPException(status_code=404, detail="Bilet bulunamadı.")
+        
+    if current_user.role == "employee" and bilet.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Bu biletin mesajlarını görme yetkiniz yok.")
+    
+    messages = db.query(model.TicketMessage).filter(model.TicketMessage.ticket_id == ticket_id).order_by(model.TicketMessage.created_at.asc()).all()
+    return messages
