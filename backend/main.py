@@ -1,25 +1,35 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from database import engine, Base
+# Rotaları içe aktarıyoruz
+from routes import tickets, reports, auth
 
-# Yazdığımız tickets rotasını içeri aktarıyoruz
-from routes import tickets
+Base.metadata.create_all(bind=engine)
 
-# Uygulamayı FastAPI olarak başlatıyoruz (Sorunu çözen kısım)
-app = FastAPI(title="Destek Bilet (Ticket) Sistemi API")
+app = FastAPI(
+    title="Destek Bilet Sistemi API",
+    description="Database ve Data Yönetimi odaklı profesyonel bilet yönetim sistemi.",
+    version="1.0.0"
+)
 
-# Güvenlik Duvarı (CORS) Ayarları
-# Frontend'inizin (HTML/JS) bu API'ye veri gönderebilmesi için şarttır
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Geliştirme ortamında her yerden gelen isteğe izin veriyoruz
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Rotaları uygulamaya bağlıyoruz
-app.include_router(tickets.router, prefix="/tickets", tags=["Tickets"])
 
-@app.get("/")
+app.include_router(auth.router)
+
+app.include_router(tickets.router, prefix="/tickets", tags=["Tickets"])
+app.include_router(reports.router, prefix="/reports", tags=["Reports"])
+
+@app.get("/", summary="Sistem Sağlık Kontrolü")
 def root():
-    return {"message": "Bilet Sistemi Backend'i Çalışıyor!"}
+    return {
+        "status": "online",
+        "message": "Destek Bilet Sistemi API başarıyla çalışıyor.",
+        "documentation": "/docs"
+    }
