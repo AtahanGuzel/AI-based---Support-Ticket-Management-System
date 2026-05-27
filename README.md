@@ -58,5 +58,4 @@ Sistem çalışırken tüm API rotalarını ve detaylarını şu adresten incele
 `http://127.0.0.1:8000/docs`
 
 ## 💡 İletişim & Geliştirici
-* **Proje Sahibi:** Ahmet Yiğit Özer
 * **Yeditepe Üniversitesi - Computer Systems Engineering**
