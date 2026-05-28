@@ -3,6 +3,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database import Base 
+from alembic import op
 
 
 class Department(Base):
@@ -24,8 +25,9 @@ class User(Base):
     password_hash = Column(String(255), nullable=False) 
     role = Column(String(20), nullable=False)
 
+    # 'employee' rolü kaldırılarak yerine 'customer' eklendi
     __table_args__ = (
-        CheckConstraint("role IN ('employee', 'agent', 'admin')", name='check_user_role'),
+        CheckConstraint("role IN ('customer', 'agent', 'admin')", name='check_user_role'),
     )
 
     department = relationship("Department", back_populates="users")

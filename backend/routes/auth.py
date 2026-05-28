@@ -1,126 +1,102 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-import bcrypt
-from typing import Optional
-
+from sqlalchemy import func, extract
+from datetime import datetime
 from database import get_db
 import model
+from pydantic import BaseModel
+from routes.auth import RoleChecker 
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/reports", tags=["Reports"])
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+# Admin yetkisi aynen kalıyor
+admin_only = RoleChecker(allowed_roles=["admin"])
 
-class TokenData(BaseModel):
-    email: Optional[str] = None
-    role: Optional[str] = None
+class ReportSummarySchema(BaseModel):
+    total_tickets: int
+    resolved_tickets: int
+    open_tickets: int
+    avg_resolution_time_hours: float
+    monthly_resolution_rate: float
 
-SECRET_KEY = "KURUMSAL_COK_GIZLI_ANAHTAR_KAPALI_AG_SISTEMI"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8
+class DepartmentReportSchema(BaseModel):
+    department_name: str
+    total_assigned: int
+    resolved_count: int
+    unresolved_count: int
+    monthly_success_rate: float
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+@router.get("/summary", response_model=ReportSummarySchema, dependencies=[Depends(admin_only)], summary="Sistem Genel Durum Raporu")
+def get_report_summary(db: Session = Depends(get_db)):
+    current_month = datetime.now().month
+    current_year = datetime.now().year
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-    except ValueError:
-        return False
-
-def get_password_hash(password: str) -> str:
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Kimlik doğrulaması başarısız.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        role: str = payload.get("role")
-        if email is None or role is None:
-            raise credentials_exception
-        token_data = TokenData(email=email, role=role)
-    except JWTError:
-        raise credentials_exception
-        
-    user = db.query(model.User).filter(model.User.email == token_data.email).first()
-    if user is None:
-        raise credentials_exception
-    return user
-
-class RoleChecker:
-    def __init__(self, allowed_roles: list[str]):
-        self.allowed_roles = allowed_roles
-
-    def __call__(self, current_user: model.User = Depends(get_current_user)):
-        if current_user.role not in self.allowed_roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Yetkiniz yok.")
-        return current_user
-
-@router.post("/login", response_model=Token)
-def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    try:
-        user = db.query(model.User).filter(model.User.email == form_data.username.strip()).first()
-        
-        if not user:
-            print(f"DEBUG: '{form_data.username}' e-postası veritabanında bulunamadı.")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Bu e-posta adresiyle kayıtlı kullanıcı bulunamadı."
-            )
-        
-        if form_data.password == "123456":
-            print(f"DEBUG: '{form_data.username}' için manuel (123456) şifre ile bypass yapıldı.")
-        
-        elif not verify_password(form_data.password, user.password_hash):
-            print(f"DEBUG: '{form_data.username}' için hash eşleşmesi başarısız.")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Hatalı şifre."
-            )
-        
-        access_token = create_access_token(data={"sub": user.email, "role": user.role})
-        print(f"DEBUG: '{form_data.username}' başarıyla giriş yaptı. Rol: {user.role}")
-        
-        return {"access_token": access_token, "token_type": "bearer"}
+    # Bu blok mevcut haliyle yeterince optimize, doğrudan kullanılıyor
+    total = db.query(func.count(model.Ticket.ticket_id)).scalar() or 0
+    resolved = db.query(func.count(model.Ticket.ticket_id)).filter(model.Ticket.status == 'resolved').scalar() or 0
+    open_tickets = db.query(func.count(model.Ticket.ticket_id)).filter(model.Ticket.status == 'open').scalar() or 0
     
-    except HTTPException as http_ex:
-        raise http_ex
-        
-    except Exception as e:
-        print(f"CRITICAL ERROR: {str(e)}") 
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="Sunucu tarafında beklenmedik bir hata oluştu."
-        )
-    
+    avg_time = db.query(func.avg(
+        func.extract('epoch', model.Ticket.resolved_at - model.Ticket.created_at) / 3600
+    )).filter(model.Ticket.status == 'resolved', model.Ticket.resolved_at.isnot(None)).scalar() or 0.0
 
-@router.get("/create-test-user")
-def create_test_user(db: Session = Depends(get_db)):
-    test_email = "ahmet.calisan@test.com"
-    hashed_pwd = get_password_hash("123456")
-    user = db.query(model.User).filter(model.User.email == test_email).first()
+    monthly_total = db.query(func.count(model.Ticket.ticket_id)).filter(
+        extract('month', model.Ticket.created_at) == current_month,
+        extract('year', model.Ticket.created_at) == current_year
+    ).scalar() or 0
     
-    if user:
-        user.password_hash = hashed_pwd
-    else:
-        new_user = model.User(full_name="Ahmet Çalışan", email=test_email, password_hash=hashed_pwd, role="employee")
-        db.add(new_user)
-    db.commit()
-    return {"status": "success"}
+    monthly_resolved = db.query(func.count(model.Ticket.ticket_id)).filter(
+        extract('month', model.Ticket.created_at) == current_month,
+        extract('year', model.Ticket.created_at) == current_year,
+        model.Ticket.status == 'resolved'
+    ).scalar() or 0
+    
+    monthly_rate = (monthly_resolved / monthly_total * 100) if monthly_total > 0 else 0.0
+
+    return {
+        "total_tickets": total,
+        "resolved_tickets": resolved,
+        "open_tickets": open_tickets,
+        "avg_resolution_time_hours": round(float(avg_time), 2),
+        "monthly_resolution_rate": round(float(monthly_rate), 2)
+    }
+
+@router.get("/by-department", response_model=list[DepartmentReportSchema], dependencies=[Depends(admin_only)], summary="Departman Bazlı Performans Raporu")
+def get_department_performance(db: Session = Depends(get_db)):
+    current_month = datetime.now().month
+    current_year = datetime.now().year
+
+    # VERİ YÖNETİMİ OPTİMİZASYONU: Döngü içindeki N+1 sorgular kaldırıldı. 
+    # Bütün istatistikler (genel ve aylık) veritabanı motoru seviyesinde tek sorguda hesaplanıyor.
+    results = db.query(
+        model.Department.department_name,
+        func.count(model.Ticket.ticket_id).label("total"),
+        func.count(model.Ticket.ticket_id).filter(model.Ticket.status == 'resolved').label("resolved"),
+        func.count(model.Ticket.ticket_id).filter(model.Ticket.status != 'resolved').label("unresolved"),
+        # Aylık verileri aynı sorgu içinde filtreliyoruz
+        func.count(model.Ticket.ticket_id).filter(
+            extract('month', model.Ticket.created_at) == current_month,
+            extract('year', model.Ticket.created_at) == current_year
+        ).label("monthly_total"),
+        func.count(model.Ticket.ticket_id).filter(
+            model.Ticket.status == 'resolved',
+            extract('month', model.Ticket.created_at) == current_month,
+            extract('year', model.Ticket.created_at) == current_year
+        ).label("monthly_resolved")
+    ).outerjoin(model.Ticket, model.Department.department_id == model.Ticket.department_id)\
+     .group_by(model.Department.department_name).all()
+
+    report_data = []
+    # Uygulama katmanında sadece veriyi formatlıyoruz (0 CPU/IO maliyeti)
+    for r in results:
+        success_rate = (r.monthly_resolved / r.monthly_total * 100) if r.monthly_total > 0 else 0.0
+
+        report_data.append({
+            "department_name": r.department_name,
+            "total_assigned": r.total,
+            "resolved_count": r.resolved,
+            "unresolved_count": r.unresolved,
+            "monthly_success_rate": round(float(success_rate), 2)
+        })
+        
+    return report_data

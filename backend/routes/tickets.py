@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 from database import get_db
 import model
 
-# Yetkilendirme  içe aktarıyoruz
+# Yetkilendirme içe aktarıyoruz
 from routes.auth import get_current_user, RoleChecker
 
 router = APIRouter()
 
-
-allow_employee = RoleChecker(["employee", "admin"])
+# 1. YETKİLENDİRME GÜNCELLEMESİ: 'employee' yerine 'customer' yetkisi tanımlandı
+allow_customer = RoleChecker(["customer", "admin"])
 allow_agent = RoleChecker(["agent", "admin"])
 allow_admin = RoleChecker(["admin"])
 
@@ -50,12 +50,12 @@ class TicketResponseSchema(BaseModel):
 class TicketDetailResponseSchema(TicketResponseSchema):
     conversation_history: List[MessageResponseSchema] = []
 
-@router.post("/submit", summary="Bilet Gönderimi (Sadece Çalışanlar)")
+@router.post("/submit", summary="Bilet Gönderimi (Sadece Müşteriler)")
 def submit_ticket(
     payload: TicketSubmitSchema, 
     request: Request,
     db: Session = Depends(get_db),
-    current_user: model.User = Depends(allow_employee) # KİLİT: Sadece Employee/Admin
+    current_user: model.User = Depends(allow_customer) # KİLİT: Sadece Customer/Admin
 ):
     try:
         client_ip = request.client.host
@@ -105,15 +105,15 @@ def submit_ticket(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Bilet oluşturulurken hata: {str(e)}")
 
-@router.get("/my-tickets", summary="Kendi Biletlerim (Sadece Çalışanlar)")
+@router.get("/my-tickets", summary="Kendi Biletlerim (Sadece Müşteriler)")
 def get_my_tickets(
     db: Session = Depends(get_db),
-    current_user: model.User = Depends(allow_employee) # KİLİT
+    current_user: model.User = Depends(allow_customer) # KİLİT: Sadece Customer/Admin
 ):
     try:
         biletler = (
             db.query(model.Ticket)
-            .filter(model.Ticket.user_id == current_user.user_id) # Veri İzolasyonu
+            .filter(model.Ticket.user_id == current_user.user_id) # Veri İzolasyonu (RLS Mantığı)
             .order_by(model.Ticket.created_at.desc())
             .all()
         )
@@ -207,7 +207,8 @@ def get_ticket_detail(
     if not bilet:
         raise HTTPException(status_code=404, detail="Bilet bulunamadı")
         
-    if current_user.role == "employee" and bilet.user_id != current_user.user_id:
+    # 2. İZOLASYON KONTROLÜ: 'employee' mantığı 'customer' olarak değiştirildi
+    if current_user.role == "customer" and bilet.user_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Sadece kendi biletlerinizi görüntüleyebilirsiniz.")
 
     mesajlar = (
@@ -266,13 +267,14 @@ def add_message(
 def get_messages(
     ticket_id: int, 
     db: Session = Depends(get_db), 
-    current_user: model.User = Depends(get_current_user) # Kullanıcıyı al
+    current_user: model.User = Depends(get_current_user) 
 ):
     bilet = db.query(model.Ticket).filter(model.Ticket.ticket_id == ticket_id).first()
     if not bilet:
         raise HTTPException(status_code=404, detail="Bilet bulunamadı.")
         
-    if current_user.role == "employee" and bilet.user_id != current_user.user_id:
+    # 3. İZOLASYON KONTROLÜ: 'employee' mantığı 'customer' olarak değiştirildi
+    if current_user.role == "customer" and bilet.user_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Bu biletin mesajlarını görme yetkiniz yok.")
     
     messages = db.query(model.TicketMessage).filter(model.TicketMessage.ticket_id == ticket_id).order_by(model.TicketMessage.created_at.asc()).all()

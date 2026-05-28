@@ -38,7 +38,7 @@ CREATE TABLE users (
     full_name     VARCHAR(100) NOT NULL,
     email         VARCHAR(100) NOT NULL UNIQUE,
     role          VARCHAR(20)  NOT NULL
-                  CHECK (role IN ('employee', 'agent', 'admin'))
+                  CHECK (role IN ('customer', 'agent', 'admin'))
 );
 
 CREATE INDEX idx_users_department ON users(department_id);
