@@ -7,23 +7,32 @@ import { useAuth } from "@/components/auth-provider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Loader2 } from "lucide-react"
 
 export default function Home() {
   const { user, login, isLoading } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleLogin = (event: React.FormEvent) => {
+  const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
-    const result = login(email.trim(), password)
+    setIsSubmitting(true)
+    setError("")
+    
+    // Asenkron login fonksiyonunu bekliyoruz
+    const result = await login(email.trim(), password)
+    
     if (!result.success) {
       setError(result.message || "Login failed")
+      setIsSubmitting(false)
       return
     }
-    setError("")
+    
     setEmail("")
     setPassword("")
+    setIsSubmitting(false)
   }
 
   if (isLoading) {
@@ -50,6 +59,7 @@ export default function Home() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
               <div className="space-y-2">
@@ -60,17 +70,28 @@ export default function Home() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="********"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
-              {error ? <p className="text-sm text-red-600">{error}</p> : null}
-              <Button type="submit" className="w-full">Login</Button>
+              {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Giriş Yapılıyor...
+                  </>
+                ) : (
+                  "Login"
+                )}
+              </Button>
             </form>
 
             <div className="rounded-xl border border-border/50 bg-slate-50 p-4 text-sm">
               <p className="font-semibold mb-2">Example users</p>
-              <p>- Customer: customer@example.com / customer123</p>
-              <p>- Agent: agent@example.com / agent123</p>
-              <p>- Admin: admin@example.com / admin123</p>
+              <p className="text-muted-foreground mb-2 text-xs">
+                Sistem artık gerçek veritabanına bağlıdır. Veritabanında kayıtlı olan kullanıcılarla giriş yapın.
+              </p>
+              <p>- destek.uzmani@test.com</p>
             </div>
           </CardContent>
         </Card>

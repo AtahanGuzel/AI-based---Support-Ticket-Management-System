@@ -46,7 +46,11 @@ export function SidebarNav() {
   if (!user) return null
 
   const navItems = roleNavigation[user.role]
-  const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+  
+  // GÜVENLİ YAZIM: Eğer isimler yoksa varsayılan değerler ('A' ve 'U' gibi) ata
+  const firstName = user.firstName || "Ahmet"; // Veritabanındaki gerçek alan adını kullan
+  const lastName = user.lastName || "Yiğit";    // Eğer alan adları farklıysa düzelt
+  const initials = `${firstName[0]}${lastName[0]}`.toUpperCase()
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border/50 bg-white">
@@ -62,44 +66,48 @@ export function SidebarNav() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-4">
-          <p className="px-3 mb-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Menu</p>
-          {navItems.map((item) => {
-            const isActive = pathname === item.href
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-gradient-to-r from-primary/10 to-accent/5 text-primary shadow-sm"
-                    : "text-muted-foreground hover:bg-slate-50 hover:text-foreground"
-                )}
-              >
-                <div className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-                  isActive 
-                    ? "bg-primary/10 text-primary" 
-                    : "bg-slate-50 text-muted-foreground group-hover:bg-slate-100 group-hover:text-foreground"
-                )}>
-                  <item.icon className="h-[18px] w-[18px]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="block truncate">{item.title}</span>
-                  <span className={cn(
-                    "text-[10px] truncate block",
-                    isActive ? "text-primary/70" : "text-muted-foreground/70"
-                  )}>{item.description}</span>
-                </div>
-                {isActive && (
-                  <ChevronRight className="h-4 w-4 text-primary/50" />
-                )}
-              </Link>
-            )
-          })}
-        </nav>
+      {/* Navigation */}
+<nav className="flex-1 space-y-1 p-4">
+  <p className="px-3 mb-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Menu</p>
+  
+  {/* navItems?.map ile güvenli hale getirdik */}
+  {navItems?.map((item) => {
+    const isActive = pathname === item.href
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={cn(
+          "group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200",
+          isActive
+            ? "bg-gradient-to-r from-primary/10 to-accent/5 text-primary shadow-sm"
+            : "text-muted-foreground hover:bg-slate-50 hover:text-foreground"
+        )}
+      >
+        <div className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+          isActive 
+            ? "bg-primary/10 text-primary" 
+            : "bg-slate-50 text-muted-foreground group-hover:bg-slate-100 group-hover:text-foreground"
+        )}>
+          {/* item.icon'un varlığından emin olmak için opsiyonel zincirleme eklenebilir */}
+          {item.icon && <item.icon className="h-[18px] w-[18px]" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="block truncate">{item.title}</span>
+          <span className={cn(
+            "text-[10px] truncate block",
+            isActive ? "text-primary/70" : "text-muted-foreground/70"
+          )}>{item.description}</span>
+        </div>
+        {isActive && (
+          <ChevronRight className="h-4 w-4 text-primary/50" />
+        )}
+      </Link>
+    )
+  })}
+</nav>
+
 
         {/* User Profile */}
         <div className="border-t border-border/50 p-4">

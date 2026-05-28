@@ -1,5 +1,5 @@
 "use client"
-
+import api from "@/lib/api";
 import { useState, useRef, useEffect } from "react"
 import { ChatMessage, TypingIndicator, type Message } from "./chat-message"
 import { ChatInput } from "./chat-input"
@@ -86,25 +86,38 @@ export function ChatInterface() {
     handleSend(suggestion)
   }
 
-  const handleFeedback = (resolved: boolean) => {
+  const handleFeedback = async (resolved: boolean) => {
     if (resolved) {
       toast.success("Great! Glad we could help!", {
         description: "Your conversation has been saved for future reference.",
       })
     } else {
-      toast.info("Creating support ticket...", {
-        description: "A support agent will follow up with you soon.",
-      })
-      // Add new ticket
-      const newTicket: MockSupportTicket = {
-        id: `TK-${1235 + tickets.length}`,
-        title: messages[0]?.content.slice(0, 50) || "Support Request",
-        priority: 3,
-        status: "open",
-        category: "General",
-        requesterEmail: user?.email || "customer@example.com",
+      const token = localStorage.getItem('token');
+      console.log("Gönderilen Token:", token); 
+      
+      if (!token) {
+        toast.error("Oturumunuz kapalı. Lütfen tekrar giriş yapın.");
+        return;
       }
-      setTickets((prev) => [newTicket, ...prev])
+
+      try {
+        const response = await api.post("/tickets/auto-create-from-chat", 
+          { 
+            topic: messages[0]?.content.slice(0, 50) || "Destek ihtiyacı (AI çözümü yetersiz)", 
+            history: messages 
+          },
+          { 
+            headers: { Authorization: `Bearer ${token}` } 
+          }
+        );
+        
+        toast.success("Bilet oluşturuldu!", {
+          description: `Bilet ID: ${response.data.ticket_id}. Bir agent en kısa sürede yanıt verecek.`
+        });
+      } catch (e) {
+        console.error("Biletleme Hatası:", e);
+        toast.error("Bilet oluşturulurken hata oluştu.");
+      }
     }
   }
 
