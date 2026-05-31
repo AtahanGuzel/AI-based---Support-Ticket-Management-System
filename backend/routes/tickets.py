@@ -12,14 +12,15 @@ from routes.auth import get_current_user, RoleChecker
 router = APIRouter()
 
 # 1. YETKİLENDİRME GÜNCELLEMESİ: 'employee' yerine 'customer' yetkisi tanımlandı
-allow_customer = RoleChecker(["customer", "admin"])
-allow_agent = RoleChecker(["agent", "admin"])
+allow_customer = RoleChecker(["employee", "agent", "admin"])
+allow_agent = RoleChecker(["agent", "admin", "employee"])
 allow_admin = RoleChecker(["admin"])
 
 
 class TicketSubmitSchema(BaseModel):
-    department_id: int 
+    department_id: int
     description: str
+    priority: int = 5
 
 class MessageCreateSchema(BaseModel):
     message_body: str
@@ -50,23 +51,44 @@ class TicketResponseSchema(BaseModel):
 class TicketDetailResponseSchema(TicketResponseSchema):
     conversation_history: List[MessageResponseSchema] = []
 
+
+class RemoveTicketRequest(BaseModel):
+    ticket_id: str
+
+
+
+@router.get("/departments", summary="Tüm Departmanları Listele")
+def get_departments(db: Session = Depends(get_db)):
+    departments = db.query(model.Department).all()
+    return [
+        {"department_id": d.department_id, "department_name": d.department_name}
+        for d in departments
+    ]
+
+@router.get("/internal/all", include_in_schema=False)
+def get_all_tickets_internal(db: Session = Depends(get_db)):
+    """Internal endpoint for model seeding — no auth required."""
+    tickets = db.query(model.Ticket).filter(model.Ticket.status != "closed").all()
+    return [{"ticket_id": t.ticket_id, "description": t.description} for t in tickets]
+
+
 @router.post("/submit", summary="Bilet Gönderimi (Sadece Müşteriler)")
 def submit_ticket(
-    payload: TicketSubmitSchema, 
+    payload: TicketSubmitSchema,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: model.User = Depends(allow_customer) # KİLİT: Sadece Customer/Admin
+    current_user: model.User = Depends(allow_customer)
 ):
     try:
         client_ip = request.client.host
         user_agent = request.headers.get('user-agent', 'Bilinmeyen OS/Tarayıcı')
-        
+
         yeni_bilet = model.Ticket(
-            user_id=current_user.user_id, # Kimlik Token'dan alınıyor
+            user_id=current_user.user_id,
             department_id=payload.department_id,
             description=payload.description,
             status='open',
-            priority=5 
+            priority=payload.priority
         )
         db.add(yeni_bilet)
         db.flush()
@@ -77,20 +99,12 @@ def submit_ticket(
             record_id=yeni_bilet.ticket_id,
             action='INSERT',
             new_data={
-                "ip_address": client_ip, 
-                "os_version": user_agent, 
+                "ip_address": client_ip,
+                "os_version": user_agent,
                 "source": "Web Form"
             }
         )
         db.add(yeni_log)
-
-        # C. İlk Mesajı Kaydet
-        yeni_mesaj = model.TicketMessage(
-            ticket_id=yeni_bilet.ticket_id,
-            sender_id=current_user.user_id, 
-            message_body=payload.description
-        )
-        db.add(yeni_mesaj)
 
         db.commit()
         db.refresh(yeni_bilet)
@@ -103,7 +117,9 @@ def submit_ticket(
 
     except Exception as e:
         db.rollback()
+        print(f"SUBMIT ERROR: {e}")
         raise HTTPException(status_code=500, detail=f"Bilet oluşturulurken hata: {str(e)}")
+
 
 @router.get("/my-tickets", summary="Kendi Biletlerim (Sadece Müşteriler)")
 def get_my_tickets(
@@ -132,18 +148,22 @@ def get_my_tickets(
         raise HTTPException(status_code=500, detail=f"Hata: {str(e)}")
 
 
-@router.get("/", summary="Öncelik Sırasına Göre Açık Biletler (Sadece Destek Personeli)")
+@router.get("/", summary="Öncelik Sırasına Göre Açık Biletler")
 def get_all_tickets(
     db: Session = Depends(get_db),
-    current_user: model.User = Depends(allow_agent)
+    current_user: model.User = Depends(allow_agent),
+    department_id: int | None = None
 ):
     try:
-        biletler = (
-            db.query(model.Ticket)
-            .filter(model.Ticket.status != "closed")
-            .order_by(model.Ticket.priority.asc(), model.Ticket.created_at.asc())
-            .all()
-        )
+        query = db.query(model.Ticket).filter(model.Ticket.status != "closed")
+        
+        # Agents only see their department, admins see all
+        if current_user.role == "agent" and current_user.department_id:
+            query = query.filter(model.Ticket.department_id == current_user.department_id)
+        elif department_id:
+            query = query.filter(model.Ticket.department_id == department_id)
+            
+        biletler = query.order_by(model.Ticket.priority.asc(), model.Ticket.created_at.asc()).all()
         return [
             {
                 "ticket_id": b.ticket_id,
@@ -151,14 +171,14 @@ def get_all_tickets(
                 "department_id": b.department_id,
                 "description": b.description,
                 "status": b.status,
-                "priority": b.priority, 
+                "priority": b.priority,
                 "created_at": b.created_at,
             }
             for b in biletler
         ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Hata: {str(e)}")
-
+        
 @router.patch("/{ticket_id}/status", summary="Bilet Durumu Güncelle (Sadece Destek Personeli)")
 def update_ticket_status(
     ticket_id: int, 
@@ -172,8 +192,14 @@ def update_ticket_status(
 
     eski_durum = bilet.status
     bilet.status = payload.status
+
     if payload.status == "resolved":
-        bilet.resolved_at = datetime.now(timezone.utc)
+        try:
+            import requests
+            requests.delete(f"http://localhost:8001/ai/ticket/TK-{ticket_id}", timeout=2)
+        except:
+            pass
+    
 
     try:
         yeni_log = model.LogTable(

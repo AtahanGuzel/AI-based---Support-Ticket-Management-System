@@ -1,0 +1,178 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #F8F9FB;
+  --foreground: #1F2937;
+  --card: #FFFFFF;
+  --card-foreground: #1F2937;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
+  --primary: #6366F1;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3F4F6;
+  --secondary-foreground: #1F2937;
+  --muted: #F3F4F6;
+  --muted-foreground: #6B7280;
+  --accent: #8B5CF6;
+  --accent-foreground: #FFFFFF;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #6366F1;
+  --chart-1: #6366F1;
+  --chart-2: #8B5CF6;
+  --chart-3: #06B6D4;
+  --chart-4: #F59E0B;
+  --chart-5: #10B981;
+  --radius: 0.75rem;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1F2937;
+  --sidebar-primary: #6366F1;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F3F4F6;
+  --sidebar-accent-foreground: #1F2937;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #6366F1;
+  
+  /* Priority colors */
+  --priority-1: #EF4444;
+  --priority-2: #F97316;
+  --priority-3: #EAB308;
+  --priority-4: #3B82F6;
+  --priority-5: #10B981;
+  
+  /* Status colors */
+  --status-open: #6366F1;
+  --status-in-progress: #F59E0B;
+  --status-resolved: #10B981;
+}
+
+
+
+@theme inline {
+  --font-sans: 'Inter', 'Geist', 'Geist Fallback', sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Priority colors */
+  --color-priority-1: var(--priority-1);
+  --color-priority-2: var(--priority-2);
+  --color-priority-3: var(--priority-3);
+  --color-priority-4: var(--priority-4);
+  --color-priority-5: var(--priority-5);
+  
+  /* Status colors */
+  --color-status-open: var(--status-open);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-resolved: var(--status-resolved);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Premium UI Utilities */
+@layer utilities {
+  .card-premium {
+    @apply bg-card rounded-2xl border border-border/50 shadow-sm;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+  }
+  
+  .card-premium-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+  
+  .card-premium-hover:hover {
+    @apply border-primary/20;
+    box-shadow: 0 8px 25px -5px rgba(99, 102, 241, 0.08), 0 4px 10px -3px rgba(99, 102, 241, 0.04);
+    transform: translateY(-2px);
+  }
+  
+  .btn-primary-gradient {
+    background: linear-gradient(135deg, var(--primary) 0%, #818CF8 100%);
+    @apply shadow-lg;
+    box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.35);
+  }
+  
+  .btn-primary-gradient:hover {
+    background: linear-gradient(135deg, #5558E8 0%, #7377F5 100%);
+    box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.45);
+  }
+  
+  .glass-effect {
+    @apply backdrop-blur-xl bg-card/80;
+  }
+  
+  .text-gradient {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Skeleton loading animation */
+  .skeleton {
+    @apply animate-pulse bg-muted rounded-lg;
+  }
+  
+  /* Priority badges with pastel tones */
+  .priority-p1 {
+    @apply bg-red-50 text-red-600 border-red-100;
+  }
+  .priority-p2 {
+    @apply bg-orange-50 text-orange-600 border-orange-100;
+  }
+  .priority-p3 {
+    @apply bg-amber-50 text-amber-600 border-amber-100;
+  }
+  .priority-p4 {
+    @apply bg-blue-50 text-blue-600 border-blue-100;
+  }
+  .priority-p5 {
+    @apply bg-emerald-50 text-emerald-600 border-emerald-100;
+  }
+}

@@ -1,0 +1,1 @@
+export type SupportCategory = "Email" | "Network" | "Security" | "Software"

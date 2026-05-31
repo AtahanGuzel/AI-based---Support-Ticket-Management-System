@@ -1,102 +1,148 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
-from datetime import datetime
 from database import get_db
 import model
 from pydantic import BaseModel
-from routes.auth import RoleChecker 
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+import os
 
-router = APIRouter(prefix="/reports", tags=["Reports"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# Admin yetkisi aynen kalıyor
-admin_only = RoleChecker(allowed_roles=["admin"])
+SECRET_KEY = os.getenv("SECRET_KEY", "changeme-super-secret-key-please-set-in-env")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
-class ReportSummarySchema(BaseModel):
-    total_tickets: int
-    resolved_tickets: int
-    open_tickets: int
-    avg_resolution_time_hours: float
-    monthly_resolution_rate: float
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-class DepartmentReportSchema(BaseModel):
-    department_name: str
-    total_assigned: int
-    resolved_count: int
-    unresolved_count: int
-    monthly_success_rate: float
 
-@router.get("/summary", response_model=ReportSummarySchema, dependencies=[Depends(admin_only)], summary="Sistem Genel Durum Raporu")
-def get_report_summary(db: Session = Depends(get_db)):
-    current_month = datetime.now().month
-    current_year = datetime.now().year
+# ── Pydantic Schemas ──────────────────────────────────────────────────────────
 
-    # Bu blok mevcut haliyle yeterince optimize, doğrudan kullanılıyor
-    total = db.query(func.count(model.Ticket.ticket_id)).scalar() or 0
-    resolved = db.query(func.count(model.Ticket.ticket_id)).filter(model.Ticket.status == 'resolved').scalar() or 0
-    open_tickets = db.query(func.count(model.Ticket.ticket_id)).filter(model.Ticket.status == 'open').scalar() or 0
-    
-    avg_time = db.query(func.avg(
-        func.extract('epoch', model.Ticket.resolved_at - model.Ticket.created_at) / 3600
-    )).filter(model.Ticket.status == 'resolved', model.Ticket.resolved_at.isnot(None)).scalar() or 0.0
+class LoginSchema(BaseModel):
+    email: str
+    password: str
 
-    monthly_total = db.query(func.count(model.Ticket.ticket_id)).filter(
-        extract('month', model.Ticket.created_at) == current_month,
-        extract('year', model.Ticket.created_at) == current_year
-    ).scalar() or 0
-    
-    monthly_resolved = db.query(func.count(model.Ticket.ticket_id)).filter(
-        extract('month', model.Ticket.created_at) == current_month,
-        extract('year', model.Ticket.created_at) == current_year,
-        model.Ticket.status == 'resolved'
-    ).scalar() or 0
-    
-    monthly_rate = (monthly_resolved / monthly_total * 100) if monthly_total > 0 else 0.0
+class UserCreateSchema(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    role: str = "customer"
+    department_id: int | None = None
 
+class TokenSchema(BaseModel):
+    access_token: str
+    token_type: str
+    user_id: int
+    role: str
+    full_name: str
+    email: str
+    department_id: int | None
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+# ── Shared Dependencies (imported by tickets.py and reports.py) ───────────────
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> model.User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(model.User).filter(model.User.user_id == int(user_id)).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+class RoleChecker:
+    """Dependency that enforces role-based access. Usage: Depends(RoleChecker(['admin']))"""
+    def __init__(self, allowed_roles: list[str]):
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, current_user: model.User = Depends(get_current_user)) -> model.User:
+        if current_user.role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required role(s): {self.allowed_roles}",
+            )
+        return current_user
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.post("/register", summary="Yeni Kullanıcı Kaydı")
+def register(payload: UserCreateSchema, db: Session = Depends(get_db)):
+    existing = db.query(model.User).filter(model.User.email == payload.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı.")
+
+    new_user = model.User(
+        full_name=payload.full_name,
+        email=payload.email,
+        password_hash=get_password_hash(payload.password),
+        role=payload.role,
+        department_id=payload.department_id,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "Kullanıcı başarıyla oluşturuldu.", "user_id": new_user.user_id}
+
+
+@router.post("/login", response_model=TokenSchema, summary="Giriş Yap / JWT Al")
+def login(payload: LoginSchema, db: Session = Depends(get_db)):
+    user = db.query(model.User).filter(model.User.email == payload.email).first()
+    if not user or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="E-posta veya şifre hatalı.",
+        )
+
+    token = create_access_token({"sub": str(user.user_id), "role": user.role})
     return {
-        "total_tickets": total,
-        "resolved_tickets": resolved,
-        "open_tickets": open_tickets,
-        "avg_resolution_time_hours": round(float(avg_time), 2),
-        "monthly_resolution_rate": round(float(monthly_rate), 2)
+    "access_token": token,
+    "token_type": "bearer",
+    "user_id": user.user_id,
+    "role": user.role,
+    "full_name": user.full_name,
+    "email": user.email,
+    "department_id": user.department_id,
+}
+
+
+@router.get("/me", summary="Mevcut Kullanıcı Bilgileri")
+def get_me(current_user: model.User = Depends(get_current_user)):
+    return {
+        "user_id": current_user.user_id,
+        "full_name": current_user.full_name,
+        "email": current_user.email,
+        "role": current_user.role,
+        "department_id": current_user.department_id,
     }
-
-@router.get("/by-department", response_model=list[DepartmentReportSchema], dependencies=[Depends(admin_only)], summary="Departman Bazlı Performans Raporu")
-def get_department_performance(db: Session = Depends(get_db)):
-    current_month = datetime.now().month
-    current_year = datetime.now().year
-
-    # VERİ YÖNETİMİ OPTİMİZASYONU: Döngü içindeki N+1 sorgular kaldırıldı. 
-    # Bütün istatistikler (genel ve aylık) veritabanı motoru seviyesinde tek sorguda hesaplanıyor.
-    results = db.query(
-        model.Department.department_name,
-        func.count(model.Ticket.ticket_id).label("total"),
-        func.count(model.Ticket.ticket_id).filter(model.Ticket.status == 'resolved').label("resolved"),
-        func.count(model.Ticket.ticket_id).filter(model.Ticket.status != 'resolved').label("unresolved"),
-        # Aylık verileri aynı sorgu içinde filtreliyoruz
-        func.count(model.Ticket.ticket_id).filter(
-            extract('month', model.Ticket.created_at) == current_month,
-            extract('year', model.Ticket.created_at) == current_year
-        ).label("monthly_total"),
-        func.count(model.Ticket.ticket_id).filter(
-            model.Ticket.status == 'resolved',
-            extract('month', model.Ticket.created_at) == current_month,
-            extract('year', model.Ticket.created_at) == current_year
-        ).label("monthly_resolved")
-    ).outerjoin(model.Ticket, model.Department.department_id == model.Ticket.department_id)\
-     .group_by(model.Department.department_name).all()
-
-    report_data = []
-    # Uygulama katmanında sadece veriyi formatlıyoruz (0 CPU/IO maliyeti)
-    for r in results:
-        success_rate = (r.monthly_resolved / r.monthly_total * 100) if r.monthly_total > 0 else 0.0
-
-        report_data.append({
-            "department_name": r.department_name,
-            "total_assigned": r.total,
-            "resolved_count": r.resolved,
-            "unresolved_count": r.unresolved,
-            "monthly_success_rate": round(float(success_rate), 2)
-        })
-        
-    return report_data
