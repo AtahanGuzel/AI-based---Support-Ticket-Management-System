@@ -68,17 +68,18 @@ def analyze_endpoint(request: AnalyzeRequest):
     if "_error" in result:
         raise HTTPException(status_code=500, detail=result["_error"])
 
-    # 4. RAG — query knowledge base if model produced a kb_query
+    # 4. RAG — query knowledge base
     kb_query = result.get("kb_query")
     if kb_query and result.get("intent") != "clarify":
+        print(f"KB QUERY: {kb_query}")   
         kb_match = query_knowledge_base(kb_query)
+        print(f"KB MATCH: {kb_match}") 
         if kb_match:
             result["intent"] = "suggest_solution"
             result["kb_title"] = kb_match["problem"]
             result["response_to_user"] = kb_match["solution"]
 
-    # 5. Duplicate detection — only for create_ticket intent
-    # 5. Duplicate detection — only for create_ticket intent
+    # 5. Duplicate detection — only if no KB solution found
     if result.get("intent") == "create_ticket":
         duplicate_id = check_duplicate(request.message)
         if duplicate_id:
@@ -88,7 +89,6 @@ def analyze_endpoint(request: AnalyzeRequest):
                 f"There is already an open ticket ({duplicate_id}) for a similar issue. "
                 f"You can follow up on that ticket instead of creating a new one."
             )
-
     # 6. Save this turn to session history
     save_history(request.session_id, request.message, result)
 
@@ -109,6 +109,18 @@ def store_ticket_endpoint(request: StoreTicketRequest):
     store_ticket(request.ticket_id, request.message)
     return {"message": f"Ticket {request.ticket_id} stored for duplicate detection."}
 
+
+@app.post("/ai/check_duplicate")
+def check_duplicate_endpoint(request: AnalyzeRequest):
+    from rag.duplicate import check_duplicate
+    duplicate_id = check_duplicate(request.message)
+    if duplicate_id:
+        return {
+            "duplicate_found": True,
+            "duplicate_id": duplicate_id,
+            "response_to_user": f"There is already an open ticket ({duplicate_id}) for a similar issue. You can follow up on that ticket instead of creating a new one."
+        }
+    return {"duplicate_found": False, "duplicate_id": None, "response_to_user": ""}
 
 @app.delete("/ai/session/{session_id}")
 def delete_session(session_id: str):

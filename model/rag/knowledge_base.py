@@ -1,7 +1,7 @@
 from rag.chromadb_client import get_knowledge_base
 
 # Similarity threshold — tune this during Phase 5 testing
-KB_SIMILARITY_THRESHOLD = 0.65
+KB_SIMILARITY_THRESHOLD = 0.45
 
 # -------------------------------------------------------------------
 # Seed Data

@@ -7,7 +7,7 @@ import { Sparkles, MessageSquarePlus, Zap, Mail, Wifi, Monitor, Key, HardDrive }
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useAuth } from "@/components/auth-provider"
-import { apiAnalyze, apiSubmitTicket, apiStoreTicket, apiGetDepartments, apiSendMessage, apiDeleteSession, type Department } from "@/lib/api"
+import { apiAnalyze, apiSubmitTicket, apiStoreTicket, apiCheckDuplicate, apiGetDepartments, apiSendMessage, apiDeleteSession, type Department } from "@/lib/api"
 
 const quickActions = [
   { label: "Email issues", icon: Mail },
@@ -21,6 +21,8 @@ export function ChatInterface() {
   const { user } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const _pendingSolution = useRef<string>("")
+  const _skipDuplicateCheck = useRef(false)
+  const _pendingUrgency = useRef<number>(3)
   const _pendingDepartment = useRef<string | null>(null)
   const [isTyping, setIsTyping] = useState(false)
   const [departments, setDepartments] = useState<Department[]>([])
@@ -36,7 +38,20 @@ export function ChatInterface() {
   }, [])
 
   const getDepartmentId = (deptName: string | null): number => {
+    console.log("getDepartmentId called with:", deptName)
+    const deptNameMap: Record<string, number> = {
+      "HR": 1,
+      "IT": 2,
+      "Finance": 7,
+      "Other": 8,
+    }
+    
+    if (deptName && deptNameMap[deptName]) {
+      return deptNameMap[deptName]
+    }
+    
     if (!deptName) return departments[0]?.department_id ?? 1
+    
     const match = departments.find(
       (d) => d.department_name.toLowerCase() === deptName.toLowerCase()
     )
@@ -44,6 +59,7 @@ export function ChatInterface() {
   }
 
   const createTicket = async (description: string, departmentId: number, priority: number = 5) => {
+    console.log("Creating ticket with departmentId:", departmentId)
     try {
       const result = await apiSubmitTicket(departmentId, description, priority)
       await apiStoreTicket(`TK-${result.ticket_id}`, description)
@@ -67,6 +83,7 @@ export function ChatInterface() {
 
   const handleSend = async (content: string, files?: File[]) => {
     console.log("Sending to AI:", process.env.NEXT_PUBLIC_AI_URL)
+    
     if (!content && !files) return
 
     const userMessage: Message = {
@@ -83,6 +100,7 @@ export function ChatInterface() {
       const userId = String(user?.userId ?? user?.email ?? "anonymous")
       const result = await apiAnalyze(userId, sessionId.current, content)
       console.log("AI result:", result)
+      console.log("urgency:", result.urgency, "priority:", 6 - result.urgency)
 
       setIsTyping(false)
 
@@ -119,6 +137,9 @@ if (ticketId) {
           })
         }
       } else if (result.intent === "suggest_solution") {
+        _pendingDepartment.current = result.department  // ADD THIS
+        _pendingUrgency.current = result.urgency
+        console.log("Stored department for suggest_solution:", result.department)
         const bubbleLabel = result.kb_title 
           ? `${result.kb_title} — click for instructions`
           : "View solution — click for instructions"
@@ -137,6 +158,7 @@ if (ticketId) {
         _pendingSolution.current = result.response_to_user
       } else if (result.intent === "duplicate_found") {
         _pendingDepartment.current = result.department
+        _pendingUrgency.current = result.urgency
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: "assistant",
@@ -204,38 +226,63 @@ if (ticketId) {
       handleSend(suggestion)
     }
   }
-
-  
   const handleFeedback = async (resolved: boolean) => {
     if (resolved) {
       toast.success("Great! Glad we could help!", {
         description: "Your conversation has been saved for future reference.",
       })
-    } else {
-      const firstUserMessage = messages.find((m) => m.role === "user")?.content ?? "Support Request"
-      const deptId = getDepartmentId(_pendingDepartment.current)
-      _pendingDepartment.current = null
-      const ticketId = await createTicket(firstUserMessage, deptId, 3)
+      return
+    }
+    console.log("handleFeedback _pendingDepartment:", _pendingDepartment.current)
   
-      if (ticketId) {
-        for (const msg of messages) {
-          await apiSendMessage(ticketId, `[${msg.role.toUpperCase()}]: ${msg.content}`)
+    const firstUserMessage = messages.find((m) => m.role === "user")?.content ?? "Support Request"
+  
+    // Skip duplicate check if we already showed a duplicate warning
+    const lastAiMessage = [...messages].reverse().find(m => m.role === "assistant")
+    const alreadyShownDuplicate = lastAiMessage?.feedbackLabels !== undefined
+  
+    if (!alreadyShownDuplicate) {
+      try {
+        const checkResult = await apiCheckDuplicate(firstUserMessage)
+        if (checkResult.duplicate_found) {
+          const aiMessage: Message = {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: checkResult.response_to_user,
+            timestamp: new Date(),
+            suggestions: [],
+            askFeedback: true,
+            feedbackLabels: { yes: "Follow up on existing ticket", no: "Create a new ticket instead" },
+          }
+          setMessages((prev) => [...prev, aiMessage])
+          return
         }
-        toast.success(`Ticket #${ticketId} created`, {
-          description: "A support agent will follow up with you soon.",
-        })
-        const aiMessage: Message = {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: `✅ Ticket #${ticketId} has been created for you. A support agent will follow up shortly.`,
-          timestamp: new Date(),
-          suggestions: [],
-          askFeedback: false,
-        }
-        setMessages((prev) => [...prev, aiMessage])
-      } else {
-        toast.error("Failed to create ticket. Please try again.")
+      } catch {}
+    }
+  
+    // No duplicate — create ticket
+    const deptId = getDepartmentId(_pendingDepartment.current)
+    _pendingDepartment.current = null
+    const ticketId = await createTicket(firstUserMessage, deptId, 6 - _pendingUrgency.current)
+  
+    if (ticketId) {
+      for (const msg of messages) {
+        await apiSendMessage(ticketId, `[${msg.role.toUpperCase()}]: ${msg.content}`)
       }
+      toast.success(`Ticket #${ticketId} created`, {
+        description: "A support agent will follow up with you soon.",
+      })
+      const aiMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `✅ Ticket #${ticketId} has been created for you. A support agent will follow up shortly.`,
+        timestamp: new Date(),
+        suggestions: [],
+        askFeedback: false,
+      }
+      setMessages((prev) => [...prev, aiMessage])
+    } else {
+      toast.error("Failed to create ticket. Please try again.")
     }
   }
 

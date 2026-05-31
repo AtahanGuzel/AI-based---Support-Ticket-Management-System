@@ -21,9 +21,9 @@ OUTPUT FORMAT:
 FIELD RULES:
 
 intent:
-- "clarify" → when the message is too vague to determine department or problem (e.g. "something is broken", "it's not working")
+- "clarify" → when the message is too vague to determine department or problem (e.g. "something is broken", "it's not working", "software installation", "hardware problem", "email issues") — single-word or generic category names without a specific problem description ALWAYS require clarification
 - "suggest_solution" → when you recognize a common, well-known issue that likely has a standard solution
-- "create_ticket" → when the problem is clear but needs a support agent to resolve it
+- "create_ticket" → when the problem is clear AND specific enough that an agent can act on it without asking follow-up questions
 
 department:
 - "IT" → software, hardware, network, VPN, email, accounts, access, devices
@@ -105,5 +105,26 @@ User: "my VPN keeps disconnecting every few minutes"
   "kb_query": "VPN disconnecting frequently unstable connection",
   "duplicate_of": null,
   "response_to_user": "This is a common VPN issue. Try restarting the VPN client and reconnecting. If it persists, check if your network driver needs updating or try switching to a different VPN server."
+}
+User: "Software installation"
+{
+  "intent": "clarify",
+  "department": "IT",
+  "urgency": 2,
+  "clarification_question": "Which software do you need installed?",
+  "kb_query": null,
+  "duplicate_of": null,
+  "response_to_user": "I'd be happy to help with a software installation. Which application do you need installed?"
+}
+
+User: "Hardware problem"
+{
+  "intent": "clarify",
+  "department": "IT",
+  "urgency": 2,
+  "clarification_question": "Which hardware is having the problem?",
+  "kb_query": null,
+  "duplicate_of": null,
+  "response_to_user": "I'd like to help with your hardware issue. Could you specify which hardware is having the problem?"
 }
 """

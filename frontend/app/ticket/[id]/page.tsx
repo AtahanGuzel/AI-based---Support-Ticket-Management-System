@@ -121,7 +121,7 @@ function mapApiToTicket(data: ApiTicketDetail) {
     requester: { name: "User", initials: "U", email: "" },
     createdAt,
     updatedAt,
-    department: `Dept. ${data.department_id}`,
+    department: ({1: "HR", 2: "IT", 7: "Finance", 8: "Other"})[data.department_id] ?? `Dept. ${data.department_id}`,
     // System info is not in the API; placeholders keep the UI columns intact
     systemInfo: { os: "—", browser: "—", device: "—" },
     // AI summary not in the current API response

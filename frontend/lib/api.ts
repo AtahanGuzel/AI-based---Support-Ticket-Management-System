@@ -24,6 +24,20 @@ export async function apiDeleteSession(sessionId: string): Promise<void> {
   await fetch(`${AI_URL}/ai/session/${sessionId}`, { method: "DELETE" }).catch(() => {})
 }
 
+export async function apiCheckDuplicate(message: string): Promise<{
+  duplicate_found: boolean
+  duplicate_id: string | null
+  response_to_user: string
+}> {
+  const AI_URL = process.env.NEXT_PUBLIC_AI_URL || "http://localhost:8001"
+  const res = await fetch(`${AI_URL}/ai/check_duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: "system", session_id: "system", message }),
+  })
+  return res.json()
+}
+
 export async function apiAnalyze(
   user_id: string,
   session_id: string,
