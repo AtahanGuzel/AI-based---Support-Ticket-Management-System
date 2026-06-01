@@ -10,25 +10,10 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: 'TicketManagementSystem',
-  description: 'AI-powered IT Support and Ticket Management System',
-  generator: 'v0.app',
+  title: 'Triage',
+  description: 'AI-powered IT helpdesk ticketing system',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/triage.png',
   },
 }
 

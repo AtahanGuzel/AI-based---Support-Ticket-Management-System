@@ -57,15 +57,9 @@ export function SidebarNav() {
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border/50 bg-white">
       <div className="flex h-full flex-col">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-3 border-b border-border/50 px-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-sm font-bold text-foreground truncate block">TicketManagement</span>
-            <span className="text-[10px] text-muted-foreground">System v1.0</span>
-          </div>
-        </div>
+<div className="flex h-16 items-center border-b border-border/50 px-6">
+  <img src="/triage.png" alt="Triage" className="h-18 w-auto" />
+</div>
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 p-4">
